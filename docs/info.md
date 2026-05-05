@@ -1,20 +1,28 @@
-<!---
-
-This file is used to generate your project datasheet. Please fill in the information below and delete any unused
-sections.
-
-You can also include images in this folder and reference them in the markdown. Each image must be less than
-512 kb in size, and the combined size of all images must be less than 1 MB.
--->
+---
+title: ASIC Onboarding Project
+---
 
 ## How it works
 
-Explain how your project works
+This project implements an SPI-controlled PWM peripheral. An SPI interface
+receives 16-bit transactions containing a register address and data value.
+The written registers control which output pins are enabled, which outputs
+use PWM mode, and the PWM duty cycle. The PWM peripheral generates a 3 kHz
+signal derived from the 10 MHz clock and drives 16 output pins independently.
 
 ## How to test
 
-Explain how to use your project
+Send SPI transactions at ~100 kHz using Mode 0 (data sampled on rising SCLK
+edge). Each transaction is 16 bits: 1 R/W bit, 7 address bits, 8 data bits.
+
+Write to the following registers:
+- 0x00: Enable outputs on uo_out[7:0]
+- 0x01: Enable outputs on uio_out[7:0]
+- 0x02: Enable PWM on uo_out[7:0]
+- 0x03: Enable PWM on uio_out[7:0]
+- 0x04: PWM duty cycle (0x00 = 0%, 0xFF = 100%)
 
 ## External hardware
 
-List external hardware used in your project (e.g. PMOD, LED display, etc), if any
+A microcontroller or SPI master device connected to ui_in[0] (SCLK),
+ui_in[1] (COPI), and ui_in[2] (nCS).
