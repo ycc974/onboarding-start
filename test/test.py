@@ -153,8 +153,6 @@ async def test_spi(dut):
 async def test_pwm_freq(dut):
     dut._log.info("Start PWM Frequency test")
 
- dut._log.info("Start PWM Frequency test")
-
     # Set the clock period to 100 ns (10 MHz)
     clock = Clock(dut.clk, 100, units="ns")
     cocotb.start_soon(clock.start())
@@ -220,13 +218,12 @@ async def test_pwm_freq(dut):
     assert 2970 <= frequency_hz <= 3030, \
         f"Frequency {frequency_hz:.2f} Hz out of range (2970-3030 Hz)"
 
-
     dut._log.info("PWM Frequency test completed successfully")
 
 
 @cocotb.test()
 async def test_pwm_duty(dut):
-     dut._log.info("Start PWM Duty Cycle test")
+    dut._log.info("Start PWM Duty Cycle test")
 
     # Set the clock period to 100 ns (10 MHz)
     clock = Clock(dut.clk, 100, units="ns")
@@ -313,4 +310,5 @@ async def test_pwm_duty(dut):
             f"Duty cycle {measured_pct:.2f}% not within 1% of {expected_pct}%"
 
         dut._log.info(f"Duty cycle 0x{duty_reg:02X} OK")
+
     dut._log.info("PWM Duty Cycle test completed successfully")
