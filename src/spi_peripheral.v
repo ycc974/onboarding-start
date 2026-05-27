@@ -20,20 +20,31 @@ module spi_peripheral (
 
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            sclk_s1 <= 0; sclk_sync <= 0;
-            copi_s1 <= 0; copi_sync <= 0;
-            ncs_s1  <= 1; ncs_sync  <= 1;
+            sclk_s1 <= 0;
+            sclk_sync <= 0;
+
+            copi_s1 <= 0;
+            copi_sync <= 0;
+
+            ncs_s1  <= 1;
+            ncs_sync  <= 1;
+
         end else begin
-            sclk_s1 <= sclk; sclk_sync <= sclk_s1;
-            copi_s1 <= copi; copi_sync <= copi_s1;
-            ncs_s1  <= ncs;  ncs_sync  <= ncs_s1;
+            sclk_s1 <= sclk;
+            sclk_sync <= sclk_s1;
+
+            copi_s1 <= copi;
+            copi_sync <= copi_s1;
+
+            ncs_s1  <= ncs; 
+            ncs_sync  <= ncs_s1;
         end
     end
 
-    // Edge detection
+    // Compare current and previous values to find rise/fall
     reg sclk_prev, ncs_prev;
 
-    always @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin // save previous values
         if (!rst_n) begin
             sclk_prev <= 0;
             ncs_prev  <= 1;
@@ -42,7 +53,7 @@ module spi_peripheral (
             ncs_prev  <= ncs_sync;
         end
     end
-
+    // rise/fall logic 
     wire sclk_rising = (sclk_sync && !sclk_prev);
     wire ncs_falling = (!ncs_sync && ncs_prev);
     wire ncs_rising  = (ncs_sync  && !ncs_prev);
