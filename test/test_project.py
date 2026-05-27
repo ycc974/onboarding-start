@@ -225,11 +225,9 @@ async def test_pwm_freq(dut):
 async def test_pwm_duty(dut):
     dut._log.info("Start PWM Duty Cycle test")
 
-    # Set the clock period to 100 ns (10 MHz)
     clock = Clock(dut.clk, 100, units="ns")
     cocotb.start_soon(clock.start())
 
-    # Reset
     dut.ena.value = 1
     dut.ui_in.value = ui_in_logicarray(1, 0, 0)
     dut.rst_n.value = 0
@@ -241,11 +239,30 @@ async def test_pwm_duty(dut):
     await send_spi_transaction(dut, 1, 0x00, 0x01)
     await send_spi_transaction(dut, 1, 0x02, 0x01)
 
-    # Test these duty cycle values
-    # (register_value, expected_percentage)
+    # Test 0% - output should stay low entire period
+    dut._log.info("Testing duty cycle 0x00 (0%)")
+    await send_spi_transaction(dut, 1, 0x04, 0x00)
+    await ClockCycles(dut.clk, 6666)
+    # Sample 10 times across a full period, should always be 0
+    for _ in range(10):
+        await ClockCycles(dut.clk, 333)
+        assert (dut.uo_out.value & 0x01) == 0, \
+            f"Expected output low for 0% duty cycle, got {dut.uo_out.value}"
+    dut._log.info("0% duty cycle OK")
+
+    # Test 100% - output should stay high entire period
+    dut._log.info("Testing duty cycle 0xFF (100%)")
+    await send_spi_transaction(dut, 1, 0x04, 0xFF)
+    await ClockCycles(dut.clk, 6666)
+    # Sample 10 times across a full period, should always be 1
+    for _ in range(10):
+        await ClockCycles(dut.clk, 333)
+        assert (dut.uo_out.value & 0x01) == 1, \
+            f"Expected output high for 100% duty cycle, got {dut.uo_out.value}"
+    dut._log.info("100% duty cycle OK")
+
+    # Test mid-range values by measuring actual duty cycle
     test_cases = [
-        (0x00, 0.0),    # 0% - output should stay low
-        (0xFF, 100.0),  # 100% - output should stay high
         (0x80, 50.0),   # 50%
         (0x40, 25.0),   # 25%
     ]
@@ -254,34 +271,17 @@ async def test_pwm_duty(dut):
         dut._log.info(f"Testing duty cycle 0x{duty_reg:02X} ({expected_pct}%)")
 
         await send_spi_transaction(dut, 1, 0x04, duty_reg)
-
-        # Wait for output to settle for 2 full PWM periods
         await ClockCycles(dut.clk, 6666)
 
-        # Special case: 0% should always be low
-        if duty_reg == 0x00:
-            await ClockCycles(dut.clk, 3333)
-            assert (dut.uo_out.value & 0x01) == 0, \
-                f"Expected output low for 0% duty cycle"
-            dut._log.info("0% duty cycle OK - output is low")
-            continue
-
-        # Special case: 100% should always be high
-        if duty_reg == 0xFF:
-            await ClockCycles(dut.clk, 3333)
-            assert (dut.uo_out.value & 0x01) == 1, \
-                f"Expected output high for 100% duty cycle"
-            dut._log.info("100% duty cycle OK - output is high")
-            continue
-
-        # For all other values, measure actual duty cycle
-        # Wait for a rising edge first
+        # Wait for a rising edge
+        timeout = 0
         while True:
             await ClockCycles(dut.clk, 1)
+            timeout += 1
             if dut.uo_out.value & 0x01:
                 break
+            assert timeout < 10000, "Timed out waiting for rising edge"
 
-        # Record start of high pulse
         high_start = cocotb.utils.get_sim_time(units="ns")
 
         # Wait for falling edge
@@ -291,21 +291,19 @@ async def test_pwm_duty(dut):
                 break
         high_end = cocotb.utils.get_sim_time(units="ns")
 
-        # Wait for next rising edge (end of period)
+        # Wait for next rising edge
         while True:
             await ClockCycles(dut.clk, 1)
             if dut.uo_out.value & 0x01:
                 break
         period_end = cocotb.utils.get_sim_time(units="ns")
 
-        # Calculate measured duty cycle
         high_time = high_end - high_start
         period = period_end - high_start
         measured_pct = (high_time / period) * 100.0
 
-        dut._log.info(f"Measured duty cycle: {measured_pct:.2f}% (expected {expected_pct}%)")
+        dut._log.info(f"Measured: {measured_pct:.2f}% (expected {expected_pct}%)")
 
-        # Assert within 1%
         assert abs(measured_pct - expected_pct) <= 1.0, \
             f"Duty cycle {measured_pct:.2f}% not within 1% of {expected_pct}%"
 
