@@ -239,41 +239,50 @@ async def test_pwm_duty(dut):
     await send_spi_transaction(dut, 1, 0x00, 0x01)
     await send_spi_transaction(dut, 1, 0x02, 0x01)
 
-    # Test 0% - output should stay low entire period
+    # Test 0%
     dut._log.info("Testing duty cycle 0x00 (0%)")
     await send_spi_transaction(dut, 1, 0x04, 0x00)
     await ClockCycles(dut.clk, 6666)
-    # Sample 10 times across a full period, should always be 0
     for _ in range(10):
         await ClockCycles(dut.clk, 333)
         assert (dut.uo_out.value & 0x01) == 0, \
-            f"Expected output low for 0% duty cycle, got {dut.uo_out.value}"
+            f"Expected output low for 0% duty cycle"
     dut._log.info("0% duty cycle OK")
 
-    # Test 100% - output should stay high entire period
+    # Test 100%
     dut._log.info("Testing duty cycle 0xFF (100%)")
     await send_spi_transaction(dut, 1, 0x04, 0xFF)
     await ClockCycles(dut.clk, 6666)
-    # Sample 10 times across a full period, should always be 1
     for _ in range(10):
         await ClockCycles(dut.clk, 333)
         assert (dut.uo_out.value & 0x01) == 1, \
-            f"Expected output high for 100% duty cycle, got {dut.uo_out.value}"
+            f"Expected output high for 100% duty cycle"
     dut._log.info("100% duty cycle OK")
 
-    # Test mid-range values by measuring actual duty cycle
+    # Test mid-range values
     test_cases = [
-        (0x80, 50.0),   # 50%
-        (0x40, 25.0),   # 25%
+        (0x80, 50.0),
+        (0x40, 25.0),
     ]
 
     for duty_reg, expected_pct in test_cases:
         dut._log.info(f"Testing duty cycle 0x{duty_reg:02X} ({expected_pct}%)")
 
         await send_spi_transaction(dut, 1, 0x04, duty_reg)
-        await ClockCycles(dut.clk, 6666)
 
-        # Wait for a rising edge
+        # Wait several periods for the new duty cycle to take effect
+        await ClockCycles(dut.clk, 10000)
+
+        # Step 1: wait for output to go LOW first (ensure clean start)
+        timeout = 0
+        while True:
+            await ClockCycles(dut.clk, 1)
+            timeout += 1
+            if not (dut.uo_out.value & 0x01):
+                break
+            assert timeout < 10000, "Timed out waiting for low"
+
+        # Step 2: now wait for rising edge - this is our clean start
         timeout = 0
         while True:
             await ClockCycles(dut.clk, 1)
@@ -284,18 +293,26 @@ async def test_pwm_duty(dut):
 
         high_start = cocotb.utils.get_sim_time(units="ns")
 
-        # Wait for falling edge
+        # Step 3: wait for falling edge
+        timeout = 0
         while True:
             await ClockCycles(dut.clk, 1)
+            timeout += 1
             if not (dut.uo_out.value & 0x01):
                 break
+            assert timeout < 10000, "Timed out waiting for falling edge"
+
         high_end = cocotb.utils.get_sim_time(units="ns")
 
-        # Wait for next rising edge
+        # Step 4: wait for next rising edge
+        timeout = 0
         while True:
             await ClockCycles(dut.clk, 1)
+            timeout += 1
             if dut.uo_out.value & 0x01:
                 break
+            assert timeout < 10000, "Timed out waiting for next rising edge"
+
         period_end = cocotb.utils.get_sim_time(units="ns")
 
         high_time = high_end - high_start
